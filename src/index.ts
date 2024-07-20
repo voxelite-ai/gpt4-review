@@ -2,15 +2,30 @@ import * as core from '@actions/core'
 import * as github from '@actions/github'
 import { Configuration, OpenAIApi } from 'openai'
 
+interface FileDiff {
+	filename: string
+	patch: string
+}
+
+interface FileAnalysis {
+	filename: string
+	feedback: string
+	patch: string
+	hasCriticalFeedback: boolean
+}
+
 async function getChangedFiles(
 	octokit: ReturnType<typeof github.getOctokit>,
 	context: typeof github.context
-): Promise<string[]> {
+): Promise<FileDiff[]> {
 	const { data: files } = await octokit.rest.pulls.listFiles({
 		...context.repo,
 		pull_number: context.payload.pull_request!.number,
 	})
-	return files.map((file) => file.filename)
+	return files.map((file) => ({
+		filename: file.filename,
+		patch: file.patch || '',
+	}))
 }
 
 async function getFileContent(
@@ -29,25 +44,90 @@ async function getFileContent(
 	throw new Error(`Unable to get content for ${filename}`)
 }
 
-async function analyzeWithGPT4(
+function extractContext(
+	fullContent: string,
+	patch: string,
+	contextLines: number = 3
+): string {
+	const lines = fullContent.split('\n')
+	const patchLines = patch.split('\n')
+	let contextContent = ''
+	let lineNumber = 0
+
+	for (const patchLine of patchLines) {
+		if (patchLine.startsWith('@@')) {
+			const match = patchLine.match(/@@ -(\d+),\d+ \+\d+,\d+ @@/)
+			if (match) {
+				lineNumber = parseInt(match[1]) - 1
+			}
+		} else if (patchLine.startsWith('-')) {
+			// Skip removed lines
+			lineNumber++
+		} else if (patchLine.startsWith('+')) {
+			const start = Math.max(0, lineNumber - contextLines)
+			const end = Math.min(lines.length, lineNumber + contextLines + 1)
+			contextContent += lines.slice(start, end).join('\n') + '\n\n'
+			lineNumber++
+		} else {
+			lineNumber++
+		}
+	}
+
+	return contextContent.trim()
+}
+
+async function generatePRSummary(
 	openai: OpenAIApi,
-	content: string
+	files: FileDiff[]
 ): Promise<string> {
+	let allChanges = files
+		.map((file) => `File: ${file.filename}\n\n${file.patch}\n\n`)
+		.join('---\n\n')
+
 	const response = await openai.createChatCompletion({
 		model: 'gpt-4',
 		messages: [
 			{
 				role: 'system',
 				content:
-					'You are a helpful code reviewer. Provide a summary of the changes and constructive feedback.',
+					'You are a helpful code reviewer. Provide a concise summary of the overall changes in this pull request.',
 			},
 			{
 				role: 'user',
-				content: `Review the following code changes:\n\n${content}`,
+				content: `Summarize the following changes in the pull request:\n\n${allChanges}`,
 			},
 		],
 	})
+
 	return response.data.choices[0].message?.content || ''
+}
+
+async function analyzeFileChanges(
+	openai: OpenAIApi,
+	filename: string,
+	patch: string,
+	context: string
+): Promise<{ feedback: string; hasCriticalFeedback: boolean }> {
+	const response = await openai.createChatCompletion({
+		model: 'gpt-4',
+		messages: [
+			{
+				role: 'system',
+				content:
+					"You are a helpful code reviewer. Provide constructive feedback on the code changes. Focus your feedback on the changed parts of the code (lines starting with '+' or '-'), but use the surrounding context to inform your analysis. At the end of your feedback, add a new line with just 'CRITICAL_FEEDBACK:' followed by 'true' if you have substantial or critical feedback, or 'false' if your feedback is minor or just positive.",
+			},
+			{
+				role: 'user',
+				content: `Review the following code changes for file ${filename}:\n\nChanged parts:\n${patch}\n\nBroader file context:\n${context}`,
+			},
+		],
+	})
+
+	const content = response.data.choices[0].message?.content || ''
+	const [feedback, criticalIndicator] = content.split('CRITICAL_FEEDBACK:')
+	const hasCriticalFeedback = criticalIndicator.trim().toLowerCase() === 'true'
+
+	return { feedback: feedback.trim(), hasCriticalFeedback }
 }
 
 async function updatePRDescription(
@@ -67,12 +147,29 @@ async function updatePRDescription(
 async function addPRComment(
 	octokit: ReturnType<typeof github.getOctokit>,
 	context: typeof github.context,
-	feedback: string
+	analyses: FileAnalysis[]
 ) {
+	const criticalAnalyses = analyses.filter(
+		(analysis) => analysis.hasCriticalFeedback
+	)
+
+	if (criticalAnalyses.length === 0) {
+		console.log('No critical feedback to add to the PR.')
+		return
+	}
+
+	let feedbackContent = '## GPT-4 Feedback\n\n'
+
+	for (const analysis of criticalAnalyses) {
+		feedbackContent += `### ${analysis.filename}\n\n`
+		feedbackContent += '```diff\n' + analysis.patch + '\n```\n\n'
+		feedbackContent += `${analysis.feedback}\n\n`
+	}
+
 	await octokit.rest.issues.createComment({
 		...context.repo,
 		issue_number: context.payload.pull_request!.number,
-		body: `## GPT-4 Feedback\n\n${feedback}`,
+		body: feedbackContent,
 	})
 }
 
@@ -85,17 +182,36 @@ async function run(): Promise<void> {
 		const openai = new OpenAIApi(new Configuration({ apiKey: openaiApiKey }))
 
 		const changedFiles = await getChangedFiles(octokit, github.context)
-		let changedContent = ''
+
+		// Generate overall PR summary
+		const prSummary = await generatePRSummary(openai, changedFiles)
+		await updatePRDescription(octokit, github.context, prSummary)
+
+		// Analyze each file separately
+		const fileAnalyses: FileAnalysis[] = []
+
 		for (const file of changedFiles) {
-			const content = await getFileContent(octokit, github.context, file)
-			changedContent += `File: ${file}\n\n${content}\n\n`
+			const fullContent = await getFileContent(
+				octokit,
+				github.context,
+				file.filename
+			)
+			const contextContent = extractContext(fullContent, file.patch)
+			const { feedback, hasCriticalFeedback } = await analyzeFileChanges(
+				openai,
+				file.filename,
+				file.patch,
+				contextContent
+			)
+			fileAnalyses.push({
+				filename: file.filename,
+				feedback,
+				patch: file.patch,
+				hasCriticalFeedback,
+			})
 		}
 
-		const analysis = await analyzeWithGPT4(openai, changedContent)
-		const [summary, feedback] = analysis.split('\n\nFeedback:')
-
-		await updatePRDescription(octokit, github.context, summary)
-		await addPRComment(octokit, github.context, feedback)
+		await addPRComment(octokit, github.context, fileAnalyses)
 	} catch (error) {
 		if (error instanceof Error) core.setFailed(error.message)
 	}
