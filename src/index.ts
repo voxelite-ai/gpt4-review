@@ -109,7 +109,7 @@ async function analyzeFileChanges(
 	context: string
 ): Promise<{ feedback: string; hasCriticalFeedback: boolean }> {
 	const response = await openai.createChatCompletion({
-		model: 'gpt-4',
+		model: 'gpt-4o',
 		messages: [
 			{
 				role: 'system',
