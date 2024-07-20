@@ -1,0 +1,32 @@
+{
+	"name": "gpt4-code-review-action",
+	"version": "1.0.0",
+	"description": "GitHub Action for automated code review using GPT-4",
+	"main": "dist/index.js",
+	"scripts": {
+		"build": "ncc build src/index.ts -o dist",
+		"test": "jest"
+	},
+	"keywords": [
+		"github",
+		"action",
+		"gpt4",
+		"code-review"
+	],
+	"author": "Your Name",
+	"license": "MIT",
+	"dependencies": {
+		"@actions/core": "^1.10.0",
+		"@actions/github": "^5.1.1",
+		"axios": "^0.27.2",
+		"openai": "^3.2.1"
+	},
+	"devDependencies": {
+		"@types/node": "^16.11.12",
+		"@vercel/ncc": "^0.33.0",
+		"typescript": "^4.5.4",
+		"jest": "^27.4.5",
+		"ts-jest": "^27.1.2",
+		"@types/jest": "^27.0.3"
+	}
+}
