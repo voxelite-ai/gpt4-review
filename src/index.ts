@@ -183,35 +183,38 @@ async function run(): Promise<void> {
 
 		const changedFiles = await getChangedFiles(octokit, github.context)
 
-		// Generate overall PR summary
-		const prSummary = await generatePRSummary(openai, changedFiles)
-		await updatePRDescription(octokit, github.context, prSummary)
+		// Generate overall PR summary and analyze files in parallel
+		const [prSummary, fileAnalyses] = await Promise.all([
+			generatePRSummary(openai, changedFiles),
+			Promise.all(
+				changedFiles.map(async (file) => {
+					const fullContent = await getFileContent(
+						octokit,
+						github.context,
+						file.filename
+					)
+					const contextContent = extractContext(fullContent, file.patch)
+					const { feedback, hasCriticalFeedback } = await analyzeFileChanges(
+						openai,
+						file.filename,
+						file.patch,
+						contextContent
+					)
+					return {
+						filename: file.filename,
+						feedback,
+						patch: file.patch,
+						hasCriticalFeedback,
+					}
+				})
+			),
+		])
 
-		// Analyze each file separately
-		const fileAnalyses: FileAnalysis[] = []
-
-		for (const file of changedFiles) {
-			const fullContent = await getFileContent(
-				octokit,
-				github.context,
-				file.filename
-			)
-			const contextContent = extractContext(fullContent, file.patch)
-			const { feedback, hasCriticalFeedback } = await analyzeFileChanges(
-				openai,
-				file.filename,
-				file.patch,
-				contextContent
-			)
-			fileAnalyses.push({
-				filename: file.filename,
-				feedback,
-				patch: file.patch,
-				hasCriticalFeedback,
-			})
-		}
-
-		await addPRComment(octokit, github.context, fileAnalyses)
+		// Update PR description and add comment in parallel
+		await Promise.all([
+			updatePRDescription(octokit, github.context, prSummary),
+			addPRComment(octokit, github.context, fileAnalyses),
+		])
 	} catch (error) {
 		if (error instanceof Error) core.setFailed(error.message)
 	}
