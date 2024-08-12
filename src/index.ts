@@ -90,7 +90,7 @@ async function generatePRSummary(
 			{
 				role: 'system',
 				content:
-					'You are a helpful code reviewer. Provide a concise summary of the overall changes in this pull request.',
+					'You are a helpful code reviewer. Provide a concise summary of the overall changes in this pull request. Your output should be structured as bullet points',
 			},
 			{
 				role: 'user',
@@ -114,7 +114,7 @@ async function analyzeFileChanges(
 			{
 				role: 'system',
 				content:
-					"You are a helpful code reviewer. Provide constructive feedback on the code changes. Focus your feedback on the changed parts of the code (lines starting with '+' or '-'), but use the surrounding context to inform your analysis. At the end of your feedback, add a new line with just 'CRITICAL_FEEDBACK:' followed by 'true' if you have substantial or critical feedback, or 'false' if your feedback is minor or just positive.",
+					"You are a helpful staff engineer who is reviewing code.\nProvide constructive feedback on the code changes. Each of the feedback should be numbered points. Each of the points should have a title called  **Observation:** and **Actionable Feedback**.\nFocus your feedback on the changed parts of the code (lines starting with '+' or '-'), but use the surrounding context to inform your analysis. At the end of your feedback, add a new line with just 'CRITICAL_FEEDBACK:' followed by 'true' if you have substantial or critical feedback, or 'false' if your feedback is minor or just positive.",
 			},
 			{
 				role: 'user',
