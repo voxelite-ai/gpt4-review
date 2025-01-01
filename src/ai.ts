@@ -3,6 +3,7 @@ import {
   HumanMessage,
   MessageContent,
 } from "@langchain/core/messages";
+import { DuckDuckGoSearch } from "@langchain/community/tools/duckduckgo_search";
 import { ChatAnthropic } from "@langchain/anthropic";
 import type { FileDiff, PRDetails } from "./github";
 
@@ -43,11 +44,13 @@ export async function analyzeFileChanges(
   context: string,
   details: PRDetails,
 ): Promise<{ feedback: string }> {
+  const duckducksearch = new DuckDuckGoSearch({ maxResults: 3 });
   const model = getModel(apiKey);
-  const response = await model.invoke([
-    {
-      role: "system",
-      content: `
+  const response = await model.invoke(
+    [
+      {
+        role: "system",
+        content: `
 You are an AI Assistant that’s an expert at reviewing pull requests. Review the below pull request that you receive. 
 
 Input format
@@ -61,19 +64,22 @@ Instructions
 - Answer in short form. 
 - Include code snippets if necessary.
 - Adhere to the languages code conventions.
-- Make it personal and always show gratitude to the author using "@" when tagging.
+- Attach useful links if necessary.
 
 Context:
 PR Title: ${details.title}
 PR Author: ${details.author}
 `,
-      // "You are a helpful staff engineer who is reviewing code.\nProvide constructive feedback on the code changes. Each of the feedback should be numbered points. Each of the points should have a title called **Observation:** and **Actionable Feedback**.\nAn example is ```3. **Observation:** Potential Performance Issue\n**Actionable Feedback:** If `setPageTitle` involves any non-trivial computation, or if `useSidebarPageStore` has additional side effects, you may want to optimize the trigger. One way is by checking if the title is already 'Tasks' before calling `setPageTitle`.```\nFocus your feedback on the changed parts of the code (lines starting with '+' or '-'), but use the surrounding context to inform your analysis. At the end of your feedback, add a new line with just 'CRITICAL_FEEDBACK:' followed by 'true' if you have substantial or critical feedback, or 'false' if your feedback is minor or just positive.",
-    },
+      },
+      {
+        role: "user",
+        content: `Review the following code changes for file ${filename}:\n\nChanged parts:\n${patch}\n\nBroader file context:\n${context}`,
+      },
+    ],
     {
-      role: "user",
-      content: `Review the following code changes for file ${filename}:\n\nChanged parts:\n${patch}\n\nBroader file context:\n${context}`,
+      tools: [duckducksearch],
     },
-  ]);
+  );
 
   const content = contentToString(response.content) || "";
 

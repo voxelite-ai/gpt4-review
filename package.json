@@ -18,8 +18,10 @@
 		"@actions/core": "^1.11.0",
 		"@actions/github": "^6.0.0",
 		"@langchain/anthropic": "^0.3.11",
+		"@langchain/community": "^0.3.21",
 		"@langchain/core": "^0.3.27",
 		"@langchain/openai": "^0.3.16",
+		"duck-duck-scrape": "^2.2.6",
 		"langchain": "^0.3.8"
 	},
 	"devDependencies": {
