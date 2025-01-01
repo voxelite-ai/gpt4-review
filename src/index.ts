@@ -10,6 +10,7 @@ async function run(): Promise<void> {
 
 		const octokit = github.getOctokit(githubToken);
 
+		const prDetails = await pr.getPRDetails(octokit, github.context);
 		const changedFiles = await pr.getChangedFiles(octokit, github.context);
 
 		// Generate overall PR summary and analyze files in parallel
@@ -26,11 +27,13 @@ async function run(): Promise<void> {
 					file.filename,
 					file.patch,
 					contextContent,
+					prDetails,
 				);
 				return {
-					filename: file.filename,
 					feedback,
+					filename: file.filename,
 					patch: file.patch,
+					author: prDetails.author,
 				};
 			}),
 		);

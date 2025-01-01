@@ -9,6 +9,29 @@ export interface FileAnalysis {
   filename: string;
   feedback: string;
   patch: string;
+  author: string;
+}
+
+export type PRDetails = {
+  title: string;
+  author: string;
+  draft?: boolean;
+};
+
+export async function getPRDetails(
+  octokit: ReturnType<typeof github.getOctokit>,
+  context: typeof github.context,
+): Promise<PRDetails> {
+  const { data: pr } = await octokit.rest.pulls.get({
+    ...context.repo,
+    pull_number: context.payload.pull_request!.number,
+  });
+
+  return {
+    title: pr.title,
+    author: pr.user.login,
+    draft: pr.draft,
+  };
 }
 
 export async function getChangedFiles(
@@ -19,6 +42,7 @@ export async function getChangedFiles(
     ...context.repo,
     pull_number: context.payload.pull_request!.number,
   });
+
   return files.map((file) => ({
     filename: file.filename,
     patch: file.patch || "",
