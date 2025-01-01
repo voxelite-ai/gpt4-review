@@ -5,11 +5,10 @@ import {
 } from "@langchain/core/messages";
 import { ChatAnthropic } from "@langchain/anthropic";
 import type { FileDiff } from "./github";
-import * as hub from "langchain/hub";
 
 export const getModel = (apiKey: string) =>
   new ChatAnthropic({
-    model: "claude-3-5-sonnet",
+    model: "claude-3-5-sonnet-20241022",
     apiKey,
     temperature: 0.1,
   });
