@@ -121,17 +121,25 @@ export async function addPRComment(
     return;
   }
 
-  let feedbackContent = "## GPT-4 Feedback\n\n";
-
   for (const analysis of analyses) {
-    feedbackContent += `### ${analysis.filename}\n\n`;
-    feedbackContent += "```diff\n" + analysis.patch + "\n```\n\n";
-    feedbackContent += `${analysis.feedback}\n\n`;
+    await octokit.rest.issues.createComment({
+      ...context.repo,
+      issue_number: context.payload.pull_request!.number,
+      body: `### ${analysis.filename}\n\n\`\`\`diff\n${analysis.patch}\n\`\`\`\n\n${analysis.feedback}\n\n`,
+    });
   }
 
-  await octokit.rest.issues.createComment({
-    ...context.repo,
-    issue_number: context.payload.pull_request!.number,
-    body: feedbackContent,
-  });
+  // let feedbackContent = "## AI Review\n\n";
+  //
+  // for (const analysis of analyses) {
+  //   feedbackContent += `### ${analysis.filename}\n\n`;
+  //   feedbackContent += "```diff\n" + analysis.patch + "\n```\n\n";
+  //   feedbackContent += `${analysis.feedback}\n\n`;
+  // }
+  //
+  // await octokit.rest.issues.createComment({
+  //   ...context.repo,
+  //   issue_number: context.payload.pull_request!.number,
+  //   body: feedbackContent,
+  // });
 }
