@@ -34,6 +34,7 @@ async function run(): Promise<void> {
 					filename: file.filename,
 					patch: file.patch,
 					author: prDetails.author,
+					sha: file.sha,
 				};
 			}),
 		);

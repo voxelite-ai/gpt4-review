@@ -130,6 +130,7 @@ function getChangedFiles(octokit, context) {
         return files.map((file) => ({
             filename: file.filename,
             patch: file.patch || "",
+            sha: file.sha,
         }));
     });
 }
@@ -184,7 +185,19 @@ function addPRComment(octokit, context, analyses) {
             return;
         }
         for (const analysis of analyses) {
-            yield octokit.rest.issues.createComment(Object.assign(Object.assign({}, context.repo), { issue_number: context.payload.pull_request.number, body: `### ${analysis.filename}\n\n\`\`\`diff\n${analysis.patch}\n\`\`\`\n\n${analysis.feedback}\n\n` }));
+            yield octokit.rest.pulls.createReviewComment({
+                pull_number: context.payload.pull_request.number,
+                repo: context.repo.repo,
+                body: `### ${analysis.filename}\n\n\`\`\`diff\n${analysis.patch}\n\`\`\`\n\n${analysis.feedback}\n\n`,
+                path: analysis.filename,
+                owner: analysis.author,
+                commit_id: analysis.sha,
+            });
+            // await octokit.rest.issues.createComment({
+            //   ...context.repo,
+            //   issue_number: context.payload.pull_request!.number,
+            //   body: `### ${analysis.filename}\n\n\`\`\`diff\n${analysis.patch}\n\`\`\`\n\n${analysis.feedback}\n\n`,
+            // });
         }
         // let feedbackContent = "## AI Review\n\n";
         //
@@ -194,11 +207,7 @@ function addPRComment(octokit, context, analyses) {
         //   feedbackContent += `${analysis.feedback}\n\n`;
         // }
         //
-        // await octokit.rest.issues.createComment({
-        //   ...context.repo,
-        //   issue_number: context.payload.pull_request!.number,
-        //   body: feedbackContent,
-        // });
+        yield octokit.rest.issues.createComment(Object.assign(Object.assign({}, context.repo), { issue_number: context.payload.pull_request.number, body: "AI Review Completed" }));
     });
 }
 
@@ -275,6 +284,7 @@ function run() {
                     filename: file.filename,
                     patch: file.patch,
                     author: prDetails.author,
+                    sha: file.sha,
                 };
             })));
             // Update PR description and add comment in parallel

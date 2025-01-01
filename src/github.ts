@@ -3,10 +3,12 @@ import * as github from "@actions/github";
 export interface FileDiff {
   filename: string;
   patch: string;
+  sha: string;
 }
 
 export interface FileAnalysis {
   filename: string;
+  sha: string;
   feedback: string;
   patch: string;
   author: string;
@@ -46,6 +48,7 @@ export async function getChangedFiles(
   return files.map((file) => ({
     filename: file.filename,
     patch: file.patch || "",
+    sha: file.sha,
   }));
 }
 
@@ -122,11 +125,20 @@ export async function addPRComment(
   }
 
   for (const analysis of analyses) {
-    await octokit.rest.issues.createComment({
-      ...context.repo,
-      issue_number: context.payload.pull_request!.number,
+    await octokit.rest.pulls.createReviewComment({
+      pull_number: context.payload.pull_request!.number,
+      repo: context.repo.repo,
       body: `### ${analysis.filename}\n\n\`\`\`diff\n${analysis.patch}\n\`\`\`\n\n${analysis.feedback}\n\n`,
+      path: analysis.filename,
+      owner: analysis.author,
+      commit_id: analysis.sha,
     });
+
+    // await octokit.rest.issues.createComment({
+    //   ...context.repo,
+    //   issue_number: context.payload.pull_request!.number,
+    //   body: `### ${analysis.filename}\n\n\`\`\`diff\n${analysis.patch}\n\`\`\`\n\n${analysis.feedback}\n\n`,
+    // });
   }
 
   // let feedbackContent = "## AI Review\n\n";
@@ -137,9 +149,9 @@ export async function addPRComment(
   //   feedbackContent += `${analysis.feedback}\n\n`;
   // }
   //
-  // await octokit.rest.issues.createComment({
-  //   ...context.repo,
-  //   issue_number: context.payload.pull_request!.number,
-  //   body: feedbackContent,
-  // });
+  await octokit.rest.issues.createComment({
+    ...context.repo,
+    issue_number: context.payload.pull_request!.number,
+    body: "AI Review Completed",
+  });
 }
