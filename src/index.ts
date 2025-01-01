@@ -129,7 +129,7 @@ async function analyzeFileChanges(
 	const [feedback, criticalIndicator] = content.split("CRITICAL_FEEDBACK:");
 	const hasCriticalFeedback = criticalIndicator.trim().toLowerCase() === "true";
 
-	return { feedback: feedback.trim(), hasCriticalFeedback };
+	return { feedback: feedback.trim(), hasCriticalFeedback: true };
 }
 
 async function updatePRDescription(
