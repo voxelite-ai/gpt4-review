@@ -22,7 +22,7 @@ exports.analyzeFileChanges = analyzeFileChanges;
 const messages_1 = __nccwpck_require__(62776);
 const anthropic_1 = __nccwpck_require__(31929);
 const getModel = (apiKey) => new anthropic_1.ChatAnthropic({
-    model: "claude-3-5-sonnet",
+    model: "claude-3-5-sonnet-20241022",
     apiKey,
     temperature: 0.1,
 });
